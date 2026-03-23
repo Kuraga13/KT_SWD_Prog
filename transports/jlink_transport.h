@@ -40,6 +40,7 @@
 #pragma once
 
 #include "../stm32_programmer.h"
+#include "../probe_info.h"
 #include <string>
 
 /// J-Link communicates via SEGGER's proprietary library (JLinkARM.dll / libjlinkarm.so).
@@ -87,6 +88,10 @@ public:
 
     JLinkTransport(const JLinkTransport&)            = delete;
     JLinkTransport& operator=(const JLinkTransport&) = delete;
+
+    /// Attempt to detect a J-Link probe by loading the DLL and reading its serial.
+    /// Returns a single-element vector if a J-Link is found, empty otherwise.
+    static std::vector<ProbeInfo> listProbes();
 
     // ── Transport interface ─────────────────────────────────
 

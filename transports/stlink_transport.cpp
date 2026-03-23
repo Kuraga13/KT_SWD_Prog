@@ -28,6 +28,81 @@ static constexpr uint16_t SUPPORTED_PIDS[] = {
     stlink::USB_PID_V3_MINIE,
 };
 
+// ── Probe name from PID ─────────────────────────────────────
+
+static const char* probename_from_pid(uint16_t pid) {
+    if (pid == stlink::USB_PID_V3 || pid == stlink::USB_PID_V3E ||
+        pid == stlink::USB_PID_V3_MINIE)
+        return "ST-Link V3";
+    if (pid == stlink::USB_PID_V2_1)
+        return "ST-Link V2-1";
+    if (pid == stlink::USB_PID_V2)
+        return "ST-Link V2";
+    return "ST-Link";
+}
+
+// ── Probe scanning ──────────────────────────────────────────
+
+std::vector<ProbeInfo> StLinkTransport::listProbes() {
+    std::vector<ProbeInfo> result;
+
+    libusb_context* ctx = nullptr;
+    if (libusb_init(&ctx) != 0)
+        return result;
+
+    libusb_device** devs = nullptr;
+    ssize_t count = libusb_get_device_list(ctx, &devs);
+    if (count < 0) {
+        libusb_exit(ctx);
+        return result;
+    }
+
+    for (ssize_t i = 0; i < count; ++i) {
+        libusb_device_descriptor desc{};
+        if (libusb_get_device_descriptor(devs[i], &desc) != 0)
+            continue;
+
+        if (desc.idVendor != stlink::USB_VID)
+            continue;
+
+        // Check if PID matches a supported ST-Link
+        bool supported = false;
+        for (uint16_t pid : SUPPORTED_PIDS) {
+            if (desc.idProduct == pid) {
+                supported = true;
+                break;
+            }
+        }
+        if (!supported)
+            continue;
+
+        ProbeInfo info;
+        info.name = probename_from_pid(desc.idProduct);
+        info.vid  = desc.idVendor;
+        info.pid  = desc.idProduct;
+
+        // Try to read serial number string
+        if (desc.iSerialNumber != 0) {
+            libusb_device_handle* handle = nullptr;
+            if (libusb_open(devs[i], &handle) == 0) {
+                unsigned char serial_buf[128] = {};
+                int len = libusb_get_string_descriptor_ascii(handle,
+                    desc.iSerialNumber, serial_buf, sizeof(serial_buf));
+                if (len > 0)
+                    info.serial.assign(reinterpret_cast<char*>(serial_buf),
+                                       static_cast<size_t>(len));
+                libusb_close(handle);
+            }
+        }
+
+        result.push_back(std::move(info));
+    }
+
+    libusb_free_device_list(devs, 1);
+    libusb_exit(ctx);
+    return result;
+}
+
 // ── Helpers ─────────────────────────────────────────────────
 
 static void store_le16(uint8_t* dst, uint16_t val) {

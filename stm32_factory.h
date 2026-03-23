@@ -66,6 +66,11 @@ namespace chip_factory {
     /// Get a human-readable name for a family.
     const char* familyName(ChipFamily family);
 
+    /// Parse a family name string to ChipFamily enum.
+    /// Accepts short names ("G0", "F4", "KE15") and full names ("STM32G0", "MKE15").
+    /// Case-insensitive. Returns ChipFamily::Unknown if no match.
+    ChipFamily familyFromString(const char* name);
+
 } // namespace chip_factory
 
 // Backward compatibility

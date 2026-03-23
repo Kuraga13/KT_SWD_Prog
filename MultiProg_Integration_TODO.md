@@ -399,9 +399,9 @@ Listed here for completeness.
 
 | # | Item | Priority | Where | Effort |
 |---|------|----------|-------|--------|
-| 1 | `verifyFlash()` with mismatch list | Critical | Library | Small |
-| 2 | Probe scanning (`listProbes()`) | Critical | Library (transports) | Medium |
-| 3 | `familyFromString()` for JSON mapping | Critical | Library (factory) | Small |
+| 1 | ~~`verifyFlash()` with mismatch list~~ | ~~Critical~~ | ~~Library~~ | **Done** |
+| 2 | ~~Probe scanning (`listProbes()`)~~ | ~~Critical~~ | ~~Library (transports)~~ | **Done** |
+| 3 | ~~`familyFromString()` for JSON mapping~~ | ~~Critical~~ | ~~Library (factory)~~ | **Done** |
 | 4 | Region routing by JSON `arguments` | Critical | Wrapper (no lib change) | Small |
 | 5 | JSON target definition files | Critical | MultiProg system_targets | Large |
 | 6 | Flash size detection | Important | Library (drivers) | Medium |

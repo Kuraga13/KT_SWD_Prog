@@ -115,6 +115,7 @@ install(FILES
     stm32_programmer.h
     stm32_chipid.h
     stm32_factory.h
+    probe_info.h
     DESTINATION ${KT_INSTALL_INCLUDEDIR}
 )
 
