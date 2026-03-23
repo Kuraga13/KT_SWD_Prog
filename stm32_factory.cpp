@@ -198,49 +198,40 @@ static bool str_eq_ci(const char* a, const char* b) {
     return *a == *b;
 }
 
-/// Check if the name matches any of the given aliases (case-insensitive)
-static bool matches(const char* name, const char* a) {
-    return str_eq_ci(name, a);
-}
-static bool matches(const char* name, const char* a, const char* b) {
-    return str_eq_ci(name, a) || str_eq_ci(name, b);
-}
-static bool matches(const char* name, const char* a, const char* b, const char* c) {
-    return str_eq_ci(name, a) || str_eq_ci(name, b) || str_eq_ci(name, c);
-}
-
+/// Parse a family name string to ChipFamily enum.
+/// Uses full names only (e.g. "STM32G0", "MKE15") to avoid collisions.
 ChipFamily chip_factory::familyFromString(const char* name) {
     if (!name || !*name)
         return ChipFamily::Unknown;
 
-    // STM32
-    if (matches(name, "F0",   "STM32F0"))   return ChipFamily::F0;
-    if (matches(name, "F1",   "STM32F1"))   return ChipFamily::F1;
-    if (matches(name, "F2",   "STM32F2"))   return ChipFamily::F2;
-    if (matches(name, "F3",   "STM32F3"))   return ChipFamily::F3;
-    if (matches(name, "F4",   "STM32F4"))   return ChipFamily::F4;
-    if (matches(name, "F7",   "STM32F7"))   return ChipFamily::F7;
-    if (matches(name, "G0",   "STM32G0"))   return ChipFamily::G0;
-    if (matches(name, "G4",   "STM32G4"))   return ChipFamily::G4;
-    if (matches(name, "H5",   "STM32H5"))   return ChipFamily::H5;
-    if (matches(name, "H7AB", "STM32H7AB")) return ChipFamily::H7AB;  // before H7
-    if (matches(name, "H7",   "STM32H7"))   return ChipFamily::H7;
-    if (matches(name, "L0",   "STM32L0"))   return ChipFamily::L0;
-    if (matches(name, "L1",   "STM32L1"))   return ChipFamily::L1;
-    if (matches(name, "L4",   "STM32L4"))   return ChipFamily::L4;
-    if (matches(name, "L5",   "STM32L5"))   return ChipFamily::L5;
-    if (matches(name, "U5",   "STM32U5"))   return ChipFamily::U5;
-    if (matches(name, "WB",   "STM32WB"))   return ChipFamily::WB;
-    if (matches(name, "WL",   "STM32WL"))   return ChipFamily::WL;
+    // STM32 — full names only to avoid collisions
+    if (str_eq_ci(name, "STM32F0"))   return ChipFamily::F0;
+    if (str_eq_ci(name, "STM32F1"))   return ChipFamily::F1;
+    if (str_eq_ci(name, "STM32F2"))   return ChipFamily::F2;
+    if (str_eq_ci(name, "STM32F3"))   return ChipFamily::F3;
+    if (str_eq_ci(name, "STM32F4"))   return ChipFamily::F4;
+    if (str_eq_ci(name, "STM32F7"))   return ChipFamily::F7;
+    if (str_eq_ci(name, "STM32G0"))   return ChipFamily::G0;
+    if (str_eq_ci(name, "STM32G4"))   return ChipFamily::G4;
+    if (str_eq_ci(name, "STM32H5"))   return ChipFamily::H5;
+    if (str_eq_ci(name, "STM32H7AB")) return ChipFamily::H7AB;  // before H7
+    if (str_eq_ci(name, "STM32H7"))   return ChipFamily::H7;
+    if (str_eq_ci(name, "STM32L0"))   return ChipFamily::L0;
+    if (str_eq_ci(name, "STM32L1"))   return ChipFamily::L1;
+    if (str_eq_ci(name, "STM32L4"))   return ChipFamily::L4;
+    if (str_eq_ci(name, "STM32L5"))   return ChipFamily::L5;
+    if (str_eq_ci(name, "STM32U5"))   return ChipFamily::U5;
+    if (str_eq_ci(name, "STM32WB"))   return ChipFamily::WB;
+    if (str_eq_ci(name, "STM32WL"))   return ChipFamily::WL;
 
-    // NXP Kinetis KE
-    if (matches(name, "KE02", "MKE02"))     return ChipFamily::KE02;
-    if (matches(name, "KE04", "MKE04"))     return ChipFamily::KE04;
-    if (matches(name, "KE06", "MKE06"))     return ChipFamily::KE06;
-    if (matches(name, "KE14", "MKE14"))     return ChipFamily::KE14;
-    if (matches(name, "KE15", "MKE15"))     return ChipFamily::KE15;
-    if (matches(name, "KE16", "MKE16"))     return ChipFamily::KE16;
-    if (matches(name, "KE18", "MKE18"))     return ChipFamily::KE18;
+    // NXP Kinetis KE — full names only
+    if (str_eq_ci(name, "MKE02"))     return ChipFamily::KE02;
+    if (str_eq_ci(name, "MKE04"))     return ChipFamily::KE04;
+    if (str_eq_ci(name, "MKE06"))     return ChipFamily::KE06;
+    if (str_eq_ci(name, "MKE14"))     return ChipFamily::KE14;
+    if (str_eq_ci(name, "MKE15"))     return ChipFamily::KE15;
+    if (str_eq_ci(name, "MKE16"))     return ChipFamily::KE16;
+    if (str_eq_ci(name, "MKE18"))     return ChipFamily::KE18;
 
     return ChipFamily::Unknown;
 }
