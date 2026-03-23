@@ -51,6 +51,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <string>
+#include <vector>
 
 /// Programmer operation result
 enum class ProgrammerStatus : uint8_t {
@@ -70,6 +71,13 @@ enum class ProgrammerStatus : uint8_t {
 /// @param bytes_total Total bytes for the operation
 /// @param user_data   Opaque pointer passed through from setProgressCallback()
 using ProgressCallback = bool(*)(uint32_t bytes_done, uint32_t bytes_total, void* user_data);
+
+/// Single byte mismatch found during verification
+struct FlashMismatch {
+    uint32_t address;
+    uint8_t  expected;
+    uint8_t  actual;
+};
 
 /// Read-out protection level
 enum class RdpLevel : uint8_t {
@@ -304,8 +312,10 @@ public:
     /// Must be called before writeFlash() if stub acceleration is desired.
     void setUseStub(bool use) { target_driver_.setUseStub(use); }
 
-    /// Set progress callback for long-running operations (write, erase).
+    /// Set progress callback for long-running operations (write, erase, verify).
     void setProgressCallback(ProgressCallback cb, void* user_data = nullptr) {
+        progress_cb_ = cb;
+        progress_user_data_ = user_data;
         target_driver_.setProgressCallback(cb, user_data);
     }
 
@@ -340,10 +350,69 @@ public:
         return status;
     }
 
+    // ── Verify ──────────────────────────────────────────────
+
+    /// Verify flash contents against expected data.
+    /// Reads flash in chunks, compares byte-by-byte, collects mismatches.
+    /// Reports progress via the callback set with setProgressCallback().
+    /// Stops collecting mismatches after max_mismatches to avoid flooding.
+    /// @return Ok if all bytes match, ErrorVerify if mismatches found,
+    ///         ErrorRead on read failure, ErrorAborted if cancelled.
+    ProgrammerStatus verifyFlash(const uint8_t*              expected,
+                                uint32_t                    address,
+                                uint32_t                    size,
+                                std::vector<FlashMismatch>& mismatches,
+                                uint32_t                    max_mismatches = 1000) {
+        clearErrors();
+        mismatches.clear();
+        if (max_mismatches == 0) max_mismatches = UINT32_MAX;
+
+        constexpr uint32_t kChunkSize = 4096;
+        uint8_t chunk_buf[kChunkSize];
+
+        uint32_t offset = 0;
+        while (offset < size) {
+            uint32_t chunk = (size - offset < kChunkSize) ? (size - offset) : kChunkSize;
+
+            auto status = target_driver_.readMemory(transport_, chunk_buf,
+                                                    address + offset, chunk);
+            if (status != ProgrammerStatus::Ok) {
+                forwardError();
+                return ProgrammerStatus::ErrorRead;
+            }
+
+            // Compare chunk against expected data
+            if (mismatches.size() < max_mismatches) {
+                for (uint32_t i = 0; i < chunk; ++i) {
+                    if (chunk_buf[i] != expected[offset + i]) {
+                        mismatches.push_back({address + offset + i,
+                                              expected[offset + i],
+                                              chunk_buf[i]});
+                        if (mismatches.size() >= max_mismatches)
+                            break;
+                    }
+                }
+            }
+
+            offset += chunk;
+
+            // Report progress, abort if requested
+            if (progress_cb_) {
+                if (!progress_cb_(offset, size, progress_user_data_))
+                    return ProgrammerStatus::ErrorAborted;
+            }
+        }
+
+        return mismatches.empty() ? ProgrammerStatus::Ok
+                                  : ProgrammerStatus::ErrorVerify;
+    }
+
 private:
-    Transport&    transport_;
-    TargetDriver& target_driver_;
-    std::string   last_error_;
+    Transport&       transport_;
+    TargetDriver&    target_driver_;
+    std::string      last_error_;
+    ProgressCallback progress_cb_        = nullptr;
+    void*            progress_user_data_ = nullptr;
 
     void clearErrors() {
         last_error_.clear();
