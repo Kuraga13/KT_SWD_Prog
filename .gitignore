@@ -1,0 +1,24 @@
+# Build artifacts
+build/
+*.o
+*.obj
+*.exe
+*.out
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*~
+CMakeUserPresets.json
+
+# Dump output
+dumps/
+
+# Session files
+session.txt
