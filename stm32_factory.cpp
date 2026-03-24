@@ -27,6 +27,7 @@
 #include "flash_drivers/stm32h5_flash.h"
 #include "flash_drivers/stm32h7_flash.h"
 #include "flash_drivers/stm32h7ab_flash.h"
+#include "flash_drivers/stm32h7rs_flash.h"
 #include "flash_drivers/stm32l0_flash.h"
 #include "flash_drivers/stm32l1_flash.h"
 #include "flash_drivers/stm32l4_flash.h"
@@ -53,6 +54,7 @@ static Stm32G4FlashDriver  driver_g4;
 static Stm32H5FlashDriver  driver_h5;
 static Stm32H7FlashDriver   driver_h7;
 static Stm32H7abFlashDriver driver_h7ab;
+static Stm32H7rsFlashDriver driver_h7rs;
 static Stm32L0FlashDriver  driver_l0;
 static Stm32L1FlashDriver  driver_l1;
 static Stm32L4FlashDriver  driver_l4;
@@ -162,6 +164,7 @@ TargetDriver* chip_factory::createDriver(ChipFamily family) {
         case ChipFamily::H5: driver = &driver_h5; break;
         case ChipFamily::H7:   driver = &driver_h7; break;
         case ChipFamily::H7AB: driver = &driver_h7ab; break;
+        case ChipFamily::H7RS: driver = &driver_h7rs; break;
         case ChipFamily::L0: driver = &driver_l0; break;
         case ChipFamily::L1: driver = &driver_l1; break;
         case ChipFamily::L4: driver = &driver_l4; break;
@@ -214,6 +217,7 @@ ChipFamily chip_factory::familyFromString(const char* name) {
     if (str_eq_ci(name, "STM32G0"))   return ChipFamily::G0;
     if (str_eq_ci(name, "STM32G4"))   return ChipFamily::G4;
     if (str_eq_ci(name, "STM32H5"))   return ChipFamily::H5;
+    if (str_eq_ci(name, "STM32H7RS")) return ChipFamily::H7RS;  // before H7AB/H7
     if (str_eq_ci(name, "STM32H7AB")) return ChipFamily::H7AB;  // before H7
     if (str_eq_ci(name, "STM32H7"))   return ChipFamily::H7;
     if (str_eq_ci(name, "STM32L0"))   return ChipFamily::L0;
@@ -250,6 +254,7 @@ const char* chip_factory::familyName(ChipFamily family) {
         case ChipFamily::H5: return "STM32H5";
         case ChipFamily::H7:   return "STM32H7";
         case ChipFamily::H7AB: return "STM32H7AB";
+        case ChipFamily::H7RS: return "STM32H7RS";
         case ChipFamily::L0: return "STM32L0";
         case ChipFamily::L1: return "STM32L1";
         case ChipFamily::L4: return "STM32L4";

@@ -32,6 +32,7 @@ set(KT_FLASH_SOURCES
     flash_drivers/stm32h5_flash.cpp
     flash_drivers/stm32h7_flash.cpp
     flash_drivers/stm32h7ab_flash.cpp
+    flash_drivers/stm32h7rs_flash.cpp
     flash_drivers/stm32l0_flash.cpp
     flash_drivers/stm32l1_flash.cpp
     flash_drivers/stm32l4_flash.cpp
@@ -132,6 +133,7 @@ install(FILES
     flash_drivers/stm32h5_flash.h
     flash_drivers/stm32h7_flash.h
     flash_drivers/stm32h7ab_flash.h
+    flash_drivers/stm32h7rs_flash.h
     flash_drivers/stm32l0_flash.h
     flash_drivers/stm32l1_flash.h
     flash_drivers/stm32l4_flash.h
