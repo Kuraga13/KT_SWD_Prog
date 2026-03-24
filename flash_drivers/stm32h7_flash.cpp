@@ -18,6 +18,11 @@
 
 using namespace stm32h7_flash;
 
+void Stm32H7FlashDriver::clearFlashErrors(Transport& transport) {
+    clearErrors(transport, FLASH_CCR1);
+    clearErrors(transport, FLASH_CCR2);
+}
+
 // ── Helpers ─────────────────────────────────────────────────
 
 ProgrammerStatus Stm32H7FlashDriver::unlockBank(Transport& transport, uint32_t keyr, uint32_t cr) {
@@ -365,7 +370,7 @@ ProgrammerStatus Stm32H7FlashDriver::writeOtp(Transport& transport,
     return ProgrammerStatus::ErrorWrite;
 }
 
-ProgrammerStatus Stm32H7FlashDriver::onDisconnect(Transport& transport) {
+ProgrammerStatus Stm32H7FlashDriver::resetTarget(Transport& transport) {
     // Trigger a clean system reset via Cortex-M AIRCR register.
     // This resets the chip independently of debug state, so the core
     // boots normally from the reset vector after the probe disconnects.

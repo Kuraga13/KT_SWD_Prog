@@ -19,13 +19,7 @@
 
 using namespace stm32f4_flash;
 
-// ── Hooks ───────────────────────────────────────────────────
-
-ProgrammerStatus Stm32F4FlashDriver::onConnect(Transport& transport) {
-    return transport.haltCore();
-}
-
-ProgrammerStatus Stm32F4FlashDriver::onDisconnect(Transport& transport) {
+ProgrammerStatus Stm32F4FlashDriver::resetTarget(Transport& transport) {
     // Trigger a clean system reset via Cortex-M AIRCR register.
     // This resets the chip independently of debug state, so the core
     // boots normally from the reset vector after the probe disconnects.

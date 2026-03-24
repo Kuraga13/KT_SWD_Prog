@@ -158,7 +158,7 @@ namespace f3_flash_loader {
 
 class Stm32F3FlashDriver : public FlashDriver {
 public:
-    ProgrammerStatus onDisconnect(Transport& transport) override;
+    ProgrammerStatus resetTarget(Transport& transport) override;
     RdpLevel         readRdpLevel(Transport& transport) override;
     ProgrammerStatus eraseFlash(Transport& transport) override;
     ProgrammerStatus writeFlash(Transport& transport, const uint8_t* data,

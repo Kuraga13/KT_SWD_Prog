@@ -109,7 +109,6 @@ namespace stm32g4_flash {
 
 class Stm32G4FlashDriver : public FlashDriver {
 public:
-    ProgrammerStatus onConnect(Transport& transport) override;
     RdpLevel         readRdpLevel(Transport& transport) override;
     ProgrammerStatus eraseFlash(Transport& transport) override;
     ProgrammerStatus writeFlash(Transport& transport, const uint8_t* data,

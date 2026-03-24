@@ -19,12 +19,6 @@
 
 using namespace stm32g0_flash;
 
-// ── Hooks ───────────────────────────────────────────────────
-
-ProgrammerStatus Stm32G0FlashDriver::onConnect(Transport& transport) {
-    return transport.haltCore();
-}
-
 // ── Helpers ─────────────────────────────────────────────────
 
 ProgrammerStatus Stm32G0FlashDriver::unlock(Transport& transport) {

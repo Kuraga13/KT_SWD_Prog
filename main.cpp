@@ -323,6 +323,7 @@ int main(int argc, char* argv[]) {
 
     // ── Commands that require a target driver ───────────────
 
+    // Phase 1: Connect raw transport for chip detection
     auto status = transport->connect();
     if (status != ProgrammerStatus::Ok) {
         fprintf(stderr, "Error: failed to connect (%s)\n", statusToString(status));
@@ -356,12 +357,19 @@ int main(int argc, char* argv[]) {
     if (dev_id) printf(" (DEV_ID: 0x%03X, REV_ID: 0x%04X)", dev_id, rev_id);
     printf("\n");
 
-    // Target-specific initialization
-    status = driver->onConnect(*transport);
+    // Close detection session
+    transport->disconnect();
+
+    // Phase 2: Reconnect through Stm32Programmer for full driver control
+    Stm32Programmer programmer(*transport, *driver);
+    programmer.setProgressCallback(cliProgressCallback);
+    if (!no_stub) programmer.setUseStub(probe == "stlink");
+
+    status = programmer.connect();
     if (status != ProgrammerStatus::Ok) {
-        fprintf(stderr, "Error: target init failed (%s)\n", statusToString(status));
-        printErrorDetail(transport.get(), driver);
-        transport->disconnect();
+        fprintf(stderr, "Error: failed to connect (%s)\n", statusToString(status));
+        if (!programmer.getLastError().empty())
+            fprintf(stderr, "  Detail: %s\n", programmer.getLastError().c_str());
         return 1;
     }
 
@@ -388,10 +396,17 @@ int main(int argc, char* argv[]) {
                 std::vector<uint8_t> buffer(size);
                 printf("Reading %u bytes from 0x%08X (%s)...\n", size, addr, region.c_str());
 
-                status = driver->readMemory(*transport, buffer.data(), addr, size);
+                if (region == "ob")
+                    status = programmer.readOptionBytes(buffer.data(), addr, size);
+                else if (region == "otp")
+                    status = programmer.readOtp(buffer.data(), addr, size);
+                else
+                    status = programmer.readFlash(buffer.data(), addr, size);
+
                 if (status != ProgrammerStatus::Ok) {
                     fprintf(stderr, "Error: read failed (%s)\n", statusToString(status));
-                    printErrorDetail(transport.get(), driver);
+                    if (!programmer.getLastError().empty())
+                        fprintf(stderr, "  Detail: %s\n", programmer.getLastError().c_str());
                     result = 1;
                 } else {
                     FILE* f = fopen(output_file.c_str(), "wb");
@@ -457,22 +472,17 @@ int main(int argc, char* argv[]) {
                     uint32_t size = static_cast<uint32_t>(fsize);
                     printf("Writing %u bytes to 0x%08X (%s)...\n", size, addr, region.c_str());
 
-                    driver->setProgressCallback(cliProgressCallback);
-
-                    if (region == "flash") {
-                        // Stub requires real core control (halt/resume);
-                        // only ST-Link implements it — other probes use slow path
-                        driver->setUseStub(probe == "stlink" && !no_stub);
-                        status = driver->writeFlash(*transport, data.data(), addr, size);
-                    }
+                    if (region == "flash")
+                        status = programmer.writeFlash(data.data(), addr, size);
                     else if (region == "ob")
-                        status = driver->writeOptionBytes(*transport, data.data(), addr, size, unsafe);
+                        status = programmer.writeOptionBytes(data.data(), addr, size, unsafe);
                     else
-                        status = driver->writeOtp(*transport, data.data(), addr, size);
+                        status = programmer.writeOtp(data.data(), addr, size);
 
                     if (status != ProgrammerStatus::Ok) {
                         fprintf(stderr, "Error: write failed (%s)\n", statusToString(status));
-                        printErrorDetail(transport.get(), driver);
+                        if (!programmer.getLastError().empty())
+                            fprintf(stderr, "  Detail: %s\n", programmer.getLastError().c_str());
                         result = 1;
                     } else {
                         printf("Write complete\n");
@@ -484,11 +494,11 @@ int main(int argc, char* argv[]) {
     // ── erase ───────────────────────────────────────────────
     else if (cmd == "erase") {
         printf("Erasing flash...\n");
-        driver->setProgressCallback(cliProgressCallback);
-        status = driver->eraseFlash(*transport);
+        status = programmer.eraseFlash();
         if (status != ProgrammerStatus::Ok) {
             fprintf(stderr, "Error: erase failed (%s)\n", statusToString(status));
-            printErrorDetail(transport.get(), driver);
+            if (!programmer.getLastError().empty())
+                fprintf(stderr, "  Detail: %s\n", programmer.getLastError().c_str());
             result = 1;
         } else {
             printf("Flash erased successfully\n");
@@ -496,7 +506,7 @@ int main(int argc, char* argv[]) {
     }
     // ── rdp ─────────────────────────────────────────────────
     else if (cmd == "rdp") {
-        RdpLevel rdp = driver->readRdpLevel(*transport);
+        RdpLevel rdp = programmer.readRdpLevel();
         printf("RDP: %s\n", rdpToString(rdp));
     }
     // ── unknown command ─────────────────────────────────────
@@ -507,8 +517,6 @@ int main(int argc, char* argv[]) {
     }
 
 cleanup:
-    // ── Cleanup ─────────────────────────────────────────────
-    driver->onDisconnect(*transport);
-    transport->disconnect();
+    programmer.disconnect();
     return result;
 }

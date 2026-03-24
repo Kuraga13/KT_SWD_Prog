@@ -137,10 +137,10 @@ namespace mke_ftfe {
 
 class MkeFtfeTargetDriver : public TargetDriver {
 public:
-    // ── TargetDriver hooks ──────────────────────────────────
+    // ── Core control ───────────────────────────────────────
 
-    /// Disable WDOG32 after connect to prevent reset during programming
-    ProgrammerStatus onConnect(Transport& transport) override;
+    /// Halt core + disable WDOG32 to prevent reset during programming
+    ProgrammerStatus haltTarget(Transport& transport) override;
 
     // ── Protection ──────────────────────────────────────────
 

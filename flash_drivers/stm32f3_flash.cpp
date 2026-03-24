@@ -18,7 +18,7 @@
 
 using namespace stm32f3_flash;
 
-ProgrammerStatus Stm32F3FlashDriver::onDisconnect(Transport& transport) {
+ProgrammerStatus Stm32F3FlashDriver::resetTarget(Transport& transport) {
     // Trigger a clean system reset via Cortex-M AIRCR register.
     // This resets the chip independently of debug state, so the core
     // boots normally from the reset vector after the probe disconnects.

@@ -183,8 +183,7 @@ namespace f4_flash_loader {
 
 class Stm32F4FlashDriver : public FlashDriver {
 public:
-    ProgrammerStatus onConnect(Transport& transport) override;
-    ProgrammerStatus onDisconnect(Transport& transport) override;
+    ProgrammerStatus resetTarget(Transport& transport) override;
 
     RdpLevel         readRdpLevel(Transport& transport) override;
     ProgrammerStatus eraseFlash(Transport& transport) override;

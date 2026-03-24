@@ -203,6 +203,8 @@ namespace h7_flash_loader {
 
 class Stm32H7FlashDriver : public FlashDriver {
 public:
+    ProgrammerStatus resetTarget(Transport& transport) override;
+    void             clearFlashErrors(Transport& transport) override;
     RdpLevel         readRdpLevel(Transport& transport) override;
     ProgrammerStatus eraseFlash(Transport& transport) override;
     ProgrammerStatus writeFlash(Transport& transport, const uint8_t* data,
@@ -211,7 +213,6 @@ public:
                                       uint32_t address, uint32_t size, bool unsafe) override;
     ProgrammerStatus writeOtp(Transport& transport, const uint8_t* data,
                               uint32_t address, uint32_t size) override;
-    ProgrammerStatus onDisconnect(Transport& transport) override;
 
 private:
     ProgrammerStatus unlockBank(Transport& transport, uint32_t keyr, uint32_t cr);

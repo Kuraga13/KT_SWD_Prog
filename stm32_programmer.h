@@ -151,21 +151,38 @@ public:
     const std::string& getLastError() const { return m_error_; }
     void clearError() { m_error_.clear(); }
 
-    // ── Hooks (defaults do nothing / passthrough) ───────────
+    // ── Connection (defaults passthrough to Transport) ─────
 
-    /// Called after Transport::connect(). Override to disable watchdog,
-    /// check debug lock registers, or perform target-specific init.
-    virtual ProgrammerStatus onConnect(Transport& transport) {
-        return ProgrammerStatus::Ok;
+    /// Connect the debug probe to the target.
+    virtual ProgrammerStatus connect(Transport& transport) {
+        return transport.connect();
     }
 
-    /// Called before Transport::disconnect(). Resets and resumes the core
-    /// so the MCU runs from its reset vector after the probe disconnects.
-    /// Override if the target needs a different reset method (e.g. AIRCR).
-    virtual ProgrammerStatus onDisconnect(Transport& transport) {
-        transport.resetTarget();
-        transport.resumeCore();
-        return ProgrammerStatus::Ok;
+    /// Disconnect the debug probe from the target.
+    virtual void disconnect(Transport& transport) {
+        transport.disconnect();
+    }
+
+    /// Clear stale flash error flags. Call before flash operations
+    /// to avoid spurious errors from power-on or previous sessions.
+    virtual void clearFlashErrors(Transport& /*transport*/) {}
+
+    // ── Core control (defaults passthrough to Transport) ─────
+
+    /// Halt the target core. Default passes through to Transport.
+    virtual ProgrammerStatus haltTarget(Transport& transport) {
+        return transport.haltCore();
+    }
+
+    /// Reset the target. Override if the target needs a different reset
+    /// method (e.g. AIRCR system reset instead of transport-level reset).
+    virtual ProgrammerStatus resetTarget(Transport& transport) {
+        return transport.resetTarget();
+    }
+
+    /// Resume the target core (run from current PC / reset vector).
+    virtual ProgrammerStatus runTarget(Transport& transport) {
+        return transport.resumeCore();
     }
 
     // ── Read (defaults passthrough to Transport) ────────────
@@ -244,23 +261,50 @@ public:
 
     ProgrammerStatus connect() {
         clearErrors();
-        auto status = transport_.connect();
+        auto status = target_driver_.connect(transport_);
         if (status != ProgrammerStatus::Ok) {
-            last_error_ = transport_.getLastError();
+            forwardError();
             return status;
         }
-        status = target_driver_.onConnect(transport_);
+        status = target_driver_.haltTarget(transport_);
         if (status != ProgrammerStatus::Ok)
             forwardError();
         return status;
     }
 
     void disconnect() {
-        target_driver_.onDisconnect(transport_);
-        transport_.disconnect();
+        target_driver_.resetTarget(transport_);
+        target_driver_.runTarget(transport_);
+        target_driver_.disconnect(transport_);
     }
 
     bool isConnected() const { return transport_.isConnected(); }
+
+    // ── Core control ────────────────────────────────────────
+
+    /// Halt the target core (routed through TargetDriver).
+    ProgrammerStatus haltTarget() {
+        auto status = target_driver_.haltTarget(transport_);
+        if (status != ProgrammerStatus::Ok) forwardError();
+        return status;
+    }
+
+    /// Resume the target core (routed through TargetDriver).
+    ProgrammerStatus runTarget() {
+        auto status = target_driver_.runTarget(transport_);
+        if (status != ProgrammerStatus::Ok) forwardError();
+        return status;
+    }
+
+    /// Reset the target (routed through TargetDriver).
+    ProgrammerStatus resetTarget() {
+        auto status = target_driver_.resetTarget(transport_);
+        if (status != ProgrammerStatus::Ok) forwardError();
+        return status;
+    }
+
+    /// Clear stale flash error flags (family-specific).
+    void clearFlashErrors() { target_driver_.clearFlashErrors(transport_); }
 
     // ── Protection ──────────────────────────────────────────
 

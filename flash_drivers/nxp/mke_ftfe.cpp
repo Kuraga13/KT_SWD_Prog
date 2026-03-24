@@ -145,7 +145,9 @@ ProgrammerStatus MkeFtfeTargetDriver::programPhrase(Transport& transport,
 
 // ── TargetDriver interface ──────────────────────────────────
 
-ProgrammerStatus MkeFtfeTargetDriver::onConnect(Transport& transport) {
+ProgrammerStatus MkeFtfeTargetDriver::haltTarget(Transport& transport) {
+    auto status = transport.haltCore();
+    if (status != ProgrammerStatus::Ok) return status;
     return disableWatchdog(transport);
 }
 

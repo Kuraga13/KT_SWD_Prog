@@ -133,8 +133,10 @@ ProgrammerStatus MkeFtmrhTargetDriver::eraseSector(Transport& transport, uint32_
 
 // ── TargetDriver interface ──────────────────────────────────
 
-ProgrammerStatus MkeFtmrhTargetDriver::onConnect(Transport& transport) {
-    auto status = disableWatchdog(transport);
+ProgrammerStatus MkeFtmrhTargetDriver::haltTarget(Transport& transport) {
+    auto status = transport.haltCore();
+    if (status != ProgrammerStatus::Ok) return status;
+    status = disableWatchdog(transport);
     if (status != ProgrammerStatus::Ok) return status;
     return setClockDivider(transport);
 }

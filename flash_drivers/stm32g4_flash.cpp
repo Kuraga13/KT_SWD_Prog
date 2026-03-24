@@ -17,12 +17,6 @@
 
 using namespace stm32g4_flash;
 
-// ── Hooks ───────────────────────────────────────────────────
-
-ProgrammerStatus Stm32G4FlashDriver::onConnect(Transport& transport) {
-    return transport.haltCore();
-}
-
 // ── Helpers ─────────────────────────────────────────────────
 
 ProgrammerStatus Stm32G4FlashDriver::unlock(Transport& transport) {
