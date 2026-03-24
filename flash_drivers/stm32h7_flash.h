@@ -211,6 +211,9 @@ public:
                                 uint32_t address, uint32_t size) override;
     ProgrammerStatus writeOptionBytes(Transport& transport, const uint8_t* data,
                                       uint32_t address, uint32_t size, bool unsafe) override;
+    ProgrammerStatus writeOptionBytesMapped(Transport& transport,
+                                             const ObWriteEntry* entries, size_t count,
+                                             bool unsafe) override;
     ProgrammerStatus writeOtp(Transport& transport, const uint8_t* data,
                               uint32_t address, uint32_t size) override;
 

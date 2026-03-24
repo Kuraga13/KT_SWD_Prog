@@ -352,7 +352,7 @@ ProgrammerStatus Stm32F4FlashDriver::writeOptionBytes(Transport& transport,
             // SAFETY: reject RDP Level 2 — permanently disables debug, irreversible
             uint8_t rdp = static_cast<uint8_t>(optcr >> 8);
             if (rdp == RDP_LEVEL_2) {
-                m_error_ = "RDP Level 2 would permanently lock the chip";
+                m_error_ = "Rejected: RDP Level 2 (0xCC) permanently disables debug — chip cannot be recovered";
                 lock(transport);
                 return ProgrammerStatus::ErrorProtected;
             }

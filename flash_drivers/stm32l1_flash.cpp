@@ -131,7 +131,7 @@ ProgrammerStatus Stm32L1FlashDriver::writeOptionBytes(Transport& transport,
         if (address <= OB_BASE && (address + size) > OB_BASE) {
             uint8_t rdp = data[OB_BASE - address];
             if (rdp == RDP_LEVEL_2) {
-                m_error_ = "RDP Level 2 would permanently lock the chip";
+                m_error_ = "Rejected: RDP Level 2 (0xCC) permanently disables debug — chip cannot be recovered";
                 lock(transport);
                 return ProgrammerStatus::ErrorProtected;
             }

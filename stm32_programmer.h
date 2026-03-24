@@ -50,6 +50,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -77,6 +78,12 @@ struct FlashMismatch {
     uint32_t address;
     uint8_t  expected;
     uint8_t  actual;
+};
+
+/// Entry for scattered option byte writes (mapped CUR/PRG register pairs)
+struct ObWriteEntry {
+    uint32_t addr;      ///< PRG register address to write to
+    uint32_t value;     ///< 32-bit word value to write
 };
 
 /// Read-out protection level
@@ -214,6 +221,22 @@ public:
                                               uint32_t       address,
                                               uint32_t       size,
                                               bool           unsafe = false) = 0;
+
+    /// Write option bytes from a scatter list (mapped CUR/PRG register pairs).
+    /// Each entry is written to its own address, then a single commit is issued.
+    /// Default: falls back to one writeOptionBytes() call per entry.
+    virtual ProgrammerStatus writeOptionBytesMapped(Transport&          transport,
+                                                     const ObWriteEntry* entries,
+                                                     size_t              count,
+                                                     bool                unsafe = false) {
+        for (size_t i = 0; i < count; i++) {
+            uint8_t data[4];
+            std::memcpy(data, &entries[i].value, 4);
+            auto status = writeOptionBytes(transport, data, entries[i].addr, 4, unsafe);
+            if (status != ProgrammerStatus::Ok) return status;
+        }
+        return ProgrammerStatus::Ok;
+    }
 
     virtual ProgrammerStatus writeOtp(Transport&     transport,
                                       const uint8_t* data,
@@ -379,6 +402,16 @@ public:
                                       bool           unsafe = false) {
         clearErrors();
         auto status = target_driver_.writeOptionBytes(transport_, data, address, size, unsafe);
+        if (status != ProgrammerStatus::Ok)
+            forwardError();
+        return status;
+    }
+
+    ProgrammerStatus writeOptionBytesMapped(const ObWriteEntry* entries,
+                                             size_t              count,
+                                             bool                unsafe = false) {
+        clearErrors();
+        auto status = target_driver_.writeOptionBytesMapped(transport_, entries, count, unsafe);
         if (status != ProgrammerStatus::Ok)
             forwardError();
         return status;
