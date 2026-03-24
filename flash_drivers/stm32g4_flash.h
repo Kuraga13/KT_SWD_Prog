@@ -80,22 +80,26 @@ namespace stm32g4_flash {
     constexpr uint32_t CR_LOCK          = (1UL << 31);
 
     // FLASH_SR bits
-    constexpr uint32_t SR_BSY           = (1UL << 16);
-    constexpr uint32_t SR_PROGERR       = (1UL << 3);
-    constexpr uint32_t SR_WRPERR        = (1UL << 4);
-    constexpr uint32_t SR_PGAERR        = (1UL << 5);
-    constexpr uint32_t SR_SIZERR        = (1UL << 6);
-    constexpr uint32_t SR_PGSERR        = (1UL << 7);
-    constexpr uint32_t SR_MISERR        = (1UL << 8);
-    constexpr uint32_t SR_FASTERR       = (1UL << 9);
-    constexpr uint32_t SR_EOP           = (1UL << 0);
+    constexpr uint32_t SR_EOP           = (1UL << 0);   // end of operation
+    constexpr uint32_t SR_OPERR         = (1UL << 1);   // operation error
+    constexpr uint32_t SR_PROGERR       = (1UL << 3);   // programming error
+    constexpr uint32_t SR_WRPERR        = (1UL << 4);   // write protection error
+    constexpr uint32_t SR_PGAERR        = (1UL << 5);   // programming alignment error
+    constexpr uint32_t SR_SIZERR        = (1UL << 6);   // size error
+    constexpr uint32_t SR_PGSERR        = (1UL << 7);   // programming sequence error
+    constexpr uint32_t SR_MISERR        = (1UL << 8);   // fast programming data miss error
+    constexpr uint32_t SR_FASTERR       = (1UL << 9);   // fast programming error
+    constexpr uint32_t SR_RDERR         = (1UL << 14);  // PCROP read error
+    constexpr uint32_t SR_OPTVERR       = (1UL << 15);  // option byte validity error
+    constexpr uint32_t SR_BSY           = (1UL << 16);  // busy
 
-    constexpr uint32_t SR_ALL_ERRORS    = SR_PROGERR | SR_WRPERR | SR_PGAERR |
-                                          SR_SIZERR | SR_PGSERR | SR_MISERR | SR_FASTERR;
+    constexpr uint32_t SR_ALL_ERRORS    = SR_OPERR | SR_PROGERR | SR_WRPERR | SR_PGAERR |
+                                          SR_SIZERR | SR_PGSERR | SR_MISERR | SR_FASTERR |
+                                          SR_RDERR | SR_OPTVERR;
 
     constexpr uint32_t FLASH_START      = 0x08000000;
-    constexpr uint32_t PAGE_SIZE        = 2048;          // 2 KB (single bank mode)
-    constexpr uint32_t PAGE_SIZE_DUAL   = 4096;          // 4 KB (dual bank mode)
+    constexpr uint32_t PAGE_SIZE        = 2048;          // 2 KB (dual bank mode, default)
+    constexpr uint32_t PAGE_SIZE_DUAL   = 4096;          // 4 KB (single bank mode)
     constexpr uint32_t OB_BASE          = 0x1FFF7800;
     constexpr uint32_t OB_SIZE          = 128;
     constexpr uint32_t OTP_BASE         = 0x1FFF7000;
@@ -115,6 +119,9 @@ public:
                                 uint32_t address, uint32_t size) override;
     ProgrammerStatus writeOptionBytes(Transport& transport, const uint8_t* data,
                                       uint32_t address, uint32_t size, bool unsafe) override;
+    ProgrammerStatus writeOptionBytesMapped(Transport& transport,
+                                             const ObWriteEntry* entries, size_t count,
+                                             bool unsafe) override;
     ProgrammerStatus writeOtp(Transport& transport, const uint8_t* data,
                               uint32_t address, uint32_t size) override;
 

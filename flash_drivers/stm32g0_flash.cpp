@@ -267,8 +267,10 @@ ProgrammerStatus Stm32G0FlashDriver::writeOptionBytes(Transport& transport,
     status = unlockOptionBytes(transport);
     if (status != ProgrammerStatus::Ok) { lock(transport); return status; }
 
+    // Clear stale error flags
+    flash_write_word(transport, FLASH_SR, SR_ALL_ERRORS | SR_EOP);
+
     if (!unsafe) {
-        // SAFETY: reject RDP Level 2 — permanently disables debug, irreversible
         if (address <= FLASH_OPTR && (address + size) > FLASH_OPTR) {
             uint8_t rdp = data[FLASH_OPTR - address];
             if (rdp == RDP_LEVEL_2) {
@@ -290,17 +292,61 @@ ProgrammerStatus Stm32G0FlashDriver::writeOptionBytes(Transport& transport,
     }
 
     if (status == ProgrammerStatus::Ok) {
-        // Start option byte programming
         uint32_t cr;
         flash_read_word(transport, FLASH_CR, cr);
         flash_write_word(transport, FLASH_CR, cr | CR_OPTSTRT);
         status = waitReady(transport);
 
-        // Launch option byte load
         if (status == ProgrammerStatus::Ok) {
             flash_read_word(transport, FLASH_CR, cr);
             flash_write_word(transport, FLASH_CR, cr | CR_OBL_LAUNCH);
         }
+    }
+
+    lock(transport);
+    return status;
+}
+
+ProgrammerStatus Stm32G0FlashDriver::writeOptionBytesMapped(Transport& transport,
+                                                              const ObWriteEntry* entries,
+                                                              size_t count, bool unsafe) {
+    auto status = unlock(transport);
+    if (status != ProgrammerStatus::Ok) return status;
+
+    status = unlockOptionBytes(transport);
+    if (status != ProgrammerStatus::Ok) { lock(transport); return status; }
+
+    // Clear stale error flags
+    flash_write_word(transport, FLASH_SR, SR_ALL_ERRORS | SR_EOP);
+
+    if (!unsafe) {
+        for (size_t i = 0; i < count; i++) {
+            if (entries[i].addr == FLASH_OPTR) {
+                uint8_t rdp = static_cast<uint8_t>(entries[i].value & 0xFF);
+                if (rdp == RDP_LEVEL_2) {
+                    m_error_ = "Rejected: RDP Level 2 (0xCC) permanently disables debug — chip cannot be recovered";
+                    lock(transport);
+                    return ProgrammerStatus::ErrorProtected;
+                }
+                break;
+            }
+        }
+    }
+
+    // Write all option byte registers, then single OPTSTRT to commit
+    for (size_t i = 0; i < count; i++) {
+        status = flash_write_word(transport, entries[i].addr, entries[i].value);
+        if (status != ProgrammerStatus::Ok) { lock(transport); return status; }
+    }
+
+    uint32_t cr;
+    flash_read_word(transport, FLASH_CR, cr);
+    flash_write_word(transport, FLASH_CR, cr | CR_OPTSTRT);
+    status = waitReady(transport);
+
+    if (status == ProgrammerStatus::Ok) {
+        flash_read_word(transport, FLASH_CR, cr);
+        flash_write_word(transport, FLASH_CR, cr | CR_OBL_LAUNCH);
     }
 
     lock(transport);
