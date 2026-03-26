@@ -29,6 +29,42 @@
 /// Serial read/write timeout in milliseconds
 static constexpr uint32_t SERIAL_TIMEOUT = 2000;
 
+// ── Port scanning ───────────────────────────────────────────
+
+std::vector<ProbeInfo> BmpTransport::listPorts() {
+    std::vector<ProbeInfo> result;
+
+#ifdef _WIN32
+    // Enumerate COM1..COM256
+    char port_name[16];
+    char target_path[256];
+    for (int i = 1; i <= 256; ++i) {
+        snprintf(port_name, sizeof(port_name), "COM%d", i);
+        DWORD ret = QueryDosDeviceA(port_name, target_path, sizeof(target_path));
+        if (ret != 0) {
+            ProbeInfo info;
+            info.name = std::string("BMP (") + port_name + ")";
+            info.serial = port_name;
+            result.push_back(std::move(info));
+        }
+    }
+#else
+    // Look for /dev/ttyACM* (typical BMP devices on Linux)
+    for (int i = 0; i < 16; ++i) {
+        char path[32];
+        snprintf(path, sizeof(path), "/dev/ttyACM%d", i);
+        if (access(path, F_OK) == 0) {
+            ProbeInfo info;
+            info.name = std::string("BMP (") + path + ")";
+            info.serial = path;
+            result.push_back(std::move(info));
+        }
+    }
+#endif
+
+    return result;
+}
+
 // ── Hex encoding helpers ────────────────────────────────────
 
 static char nibble_to_hex(uint8_t nibble) {

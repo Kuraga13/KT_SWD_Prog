@@ -39,6 +39,7 @@
 #pragma once
 
 #include "../stm32_programmer.h"
+#include "../probe_info.h"
 #include <string>
 
 /// Black Magic Probe communicates via GDB Remote Serial Protocol
@@ -68,6 +69,10 @@ public:
 
     BmpTransport(const BmpTransport&)            = delete;
     BmpTransport& operator=(const BmpTransport&) = delete;
+
+    /// List serial ports that may be BMP devices.
+    /// On Windows: enumerates COM ports. On Linux/macOS: looks for /dev/ttyACM*.
+    static std::vector<ProbeInfo> listPorts();
 
     // ── Transport interface ─────────────────────────────────
 

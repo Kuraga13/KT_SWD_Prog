@@ -50,7 +50,9 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cstring>
 #include <string>
+#include <vector>
 
 /// Programmer operation result
 enum class ProgrammerStatus : uint8_t {
@@ -70,6 +72,19 @@ enum class ProgrammerStatus : uint8_t {
 /// @param bytes_total Total bytes for the operation
 /// @param user_data   Opaque pointer passed through from setProgressCallback()
 using ProgressCallback = bool(*)(uint32_t bytes_done, uint32_t bytes_total, void* user_data);
+
+/// Single byte mismatch found during verification
+struct FlashMismatch {
+    uint32_t address;
+    uint8_t  expected;
+    uint8_t  actual;
+};
+
+/// Entry for scattered option byte writes (mapped CUR/PRG register pairs)
+struct ObWriteEntry {
+    uint32_t addr;      ///< PRG register address to write to
+    uint32_t value;     ///< 32-bit word value to write
+};
 
 /// Read-out protection level
 enum class RdpLevel : uint8_t {
@@ -143,21 +158,38 @@ public:
     const std::string& getLastError() const { return m_error_; }
     void clearError() { m_error_.clear(); }
 
-    // ── Hooks (defaults do nothing / passthrough) ───────────
+    // ── Connection (defaults passthrough to Transport) ─────
 
-    /// Called after Transport::connect(). Override to disable watchdog,
-    /// check debug lock registers, or perform target-specific init.
-    virtual ProgrammerStatus onConnect(Transport& transport) {
-        return ProgrammerStatus::Ok;
+    /// Connect the debug probe to the target.
+    virtual ProgrammerStatus connect(Transport& transport) {
+        return transport.connect();
     }
 
-    /// Called before Transport::disconnect(). Resets and resumes the core
-    /// so the MCU runs from its reset vector after the probe disconnects.
-    /// Override if the target needs a different reset method (e.g. AIRCR).
-    virtual ProgrammerStatus onDisconnect(Transport& transport) {
-        transport.resetTarget();
-        transport.resumeCore();
-        return ProgrammerStatus::Ok;
+    /// Disconnect the debug probe from the target.
+    virtual void disconnect(Transport& transport) {
+        transport.disconnect();
+    }
+
+    /// Clear stale flash error flags. Call before flash operations
+    /// to avoid spurious errors from power-on or previous sessions.
+    virtual void clearFlashErrors(Transport& /*transport*/) {}
+
+    // ── Core control (defaults passthrough to Transport) ─────
+
+    /// Halt the target core. Default passes through to Transport.
+    virtual ProgrammerStatus haltTarget(Transport& transport) {
+        return transport.haltCore();
+    }
+
+    /// Reset the target. Override if the target needs a different reset
+    /// method (e.g. AIRCR system reset instead of transport-level reset).
+    virtual ProgrammerStatus resetTarget(Transport& transport) {
+        return transport.resetTarget();
+    }
+
+    /// Resume the target core (run from current PC / reset vector).
+    virtual ProgrammerStatus runTarget(Transport& transport) {
+        return transport.resumeCore();
     }
 
     // ── Read (defaults passthrough to Transport) ────────────
@@ -189,6 +221,22 @@ public:
                                               uint32_t       address,
                                               uint32_t       size,
                                               bool           unsafe = false) = 0;
+
+    /// Write option bytes from a scatter list (mapped CUR/PRG register pairs).
+    /// Each entry is written to its own address, then a single commit is issued.
+    /// Default: falls back to one writeOptionBytes() call per entry.
+    virtual ProgrammerStatus writeOptionBytesMapped(Transport&          transport,
+                                                     const ObWriteEntry* entries,
+                                                     size_t              count,
+                                                     bool                unsafe = false) {
+        for (size_t i = 0; i < count; i++) {
+            uint8_t data[4];
+            std::memcpy(data, &entries[i].value, 4);
+            auto status = writeOptionBytes(transport, data, entries[i].addr, 4, unsafe);
+            if (status != ProgrammerStatus::Ok) return status;
+        }
+        return ProgrammerStatus::Ok;
+    }
 
     virtual ProgrammerStatus writeOtp(Transport&     transport,
                                       const uint8_t* data,
@@ -236,23 +284,50 @@ public:
 
     ProgrammerStatus connect() {
         clearErrors();
-        auto status = transport_.connect();
+        auto status = target_driver_.connect(transport_);
         if (status != ProgrammerStatus::Ok) {
-            last_error_ = transport_.getLastError();
+            forwardError();
             return status;
         }
-        status = target_driver_.onConnect(transport_);
+        status = target_driver_.haltTarget(transport_);
         if (status != ProgrammerStatus::Ok)
             forwardError();
         return status;
     }
 
     void disconnect() {
-        target_driver_.onDisconnect(transport_);
-        transport_.disconnect();
+        target_driver_.resetTarget(transport_);
+        target_driver_.runTarget(transport_);
+        target_driver_.disconnect(transport_);
     }
 
     bool isConnected() const { return transport_.isConnected(); }
+
+    // ── Core control ────────────────────────────────────────
+
+    /// Halt the target core (routed through TargetDriver).
+    ProgrammerStatus haltTarget() {
+        auto status = target_driver_.haltTarget(transport_);
+        if (status != ProgrammerStatus::Ok) forwardError();
+        return status;
+    }
+
+    /// Resume the target core (routed through TargetDriver).
+    ProgrammerStatus runTarget() {
+        auto status = target_driver_.runTarget(transport_);
+        if (status != ProgrammerStatus::Ok) forwardError();
+        return status;
+    }
+
+    /// Reset the target (routed through TargetDriver).
+    ProgrammerStatus resetTarget() {
+        auto status = target_driver_.resetTarget(transport_);
+        if (status != ProgrammerStatus::Ok) forwardError();
+        return status;
+    }
+
+    /// Clear stale flash error flags (family-specific).
+    void clearFlashErrors() { target_driver_.clearFlashErrors(transport_); }
 
     // ── Protection ──────────────────────────────────────────
 
@@ -304,8 +379,10 @@ public:
     /// Must be called before writeFlash() if stub acceleration is desired.
     void setUseStub(bool use) { target_driver_.setUseStub(use); }
 
-    /// Set progress callback for long-running operations (write, erase).
+    /// Set progress callback for long-running operations (write, erase, verify).
     void setProgressCallback(ProgressCallback cb, void* user_data = nullptr) {
+        progress_cb_ = cb;
+        progress_user_data_ = user_data;
         target_driver_.setProgressCallback(cb, user_data);
     }
 
@@ -330,6 +407,16 @@ public:
         return status;
     }
 
+    ProgrammerStatus writeOptionBytesMapped(const ObWriteEntry* entries,
+                                             size_t              count,
+                                             bool                unsafe = false) {
+        clearErrors();
+        auto status = target_driver_.writeOptionBytesMapped(transport_, entries, count, unsafe);
+        if (status != ProgrammerStatus::Ok)
+            forwardError();
+        return status;
+    }
+
     ProgrammerStatus writeOtp(const uint8_t* data,
                               uint32_t       address,
                               uint32_t       size) {
@@ -340,10 +427,69 @@ public:
         return status;
     }
 
+    // ── Verify ──────────────────────────────────────────────
+
+    /// Verify flash contents against expected data.
+    /// Reads flash in chunks, compares byte-by-byte, collects mismatches.
+    /// Reports progress via the callback set with setProgressCallback().
+    /// Stops collecting mismatches after max_mismatches to avoid flooding.
+    /// @return Ok if all bytes match, ErrorVerify if mismatches found,
+    ///         ErrorRead on read failure, ErrorAborted if cancelled.
+    ProgrammerStatus verifyFlash(const uint8_t*              expected,
+                                uint32_t                    address,
+                                uint32_t                    size,
+                                std::vector<FlashMismatch>& mismatches,
+                                uint32_t                    max_mismatches = 1000) {
+        clearErrors();
+        mismatches.clear();
+        if (max_mismatches == 0) max_mismatches = UINT32_MAX;
+
+        constexpr uint32_t kChunkSize = 4096;
+        uint8_t chunk_buf[kChunkSize];
+
+        uint32_t offset = 0;
+        while (offset < size) {
+            uint32_t chunk = (size - offset < kChunkSize) ? (size - offset) : kChunkSize;
+
+            auto status = target_driver_.readMemory(transport_, chunk_buf,
+                                                    address + offset, chunk);
+            if (status != ProgrammerStatus::Ok) {
+                forwardError();
+                return ProgrammerStatus::ErrorRead;
+            }
+
+            // Compare chunk against expected data
+            if (mismatches.size() < max_mismatches) {
+                for (uint32_t i = 0; i < chunk; ++i) {
+                    if (chunk_buf[i] != expected[offset + i]) {
+                        mismatches.push_back({address + offset + i,
+                                              expected[offset + i],
+                                              chunk_buf[i]});
+                        if (mismatches.size() >= max_mismatches)
+                            break;
+                    }
+                }
+            }
+
+            offset += chunk;
+
+            // Report progress, abort if requested
+            if (progress_cb_) {
+                if (!progress_cb_(offset, size, progress_user_data_))
+                    return ProgrammerStatus::ErrorAborted;
+            }
+        }
+
+        return mismatches.empty() ? ProgrammerStatus::Ok
+                                  : ProgrammerStatus::ErrorVerify;
+    }
+
 private:
-    Transport&    transport_;
-    TargetDriver& target_driver_;
-    std::string   last_error_;
+    Transport&       transport_;
+    TargetDriver&    target_driver_;
+    std::string      last_error_;
+    ProgressCallback progress_cb_        = nullptr;
+    void*            progress_user_data_ = nullptr;
 
     void clearErrors() {
         last_error_.clear();

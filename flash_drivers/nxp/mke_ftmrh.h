@@ -110,10 +110,10 @@ namespace mke_ftmrh {
 
 class MkeFtmrhTargetDriver : public TargetDriver {
 public:
-    // ── TargetDriver hooks ──────────────────────────────────
+    // ── Core control ───────────────────────────────────────
 
-    /// Disable watchdog after connect to prevent reset during programming
-    ProgrammerStatus onConnect(Transport& transport) override;
+    /// Halt core + disable watchdog + set clock divider
+    ProgrammerStatus haltTarget(Transport& transport) override;
 
     // ── Protection ──────────────────────────────────────────
 

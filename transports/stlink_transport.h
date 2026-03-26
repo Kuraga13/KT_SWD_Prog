@@ -38,6 +38,7 @@
 #pragma once
 
 #include "../stm32_programmer.h"
+#include "../probe_info.h"
 #include <libusb-1.0/libusb.h>
 
 /// ST-Link USB vendor/product IDs
@@ -83,6 +84,9 @@ public:
 
     StLinkTransport(const StLinkTransport&)            = delete;
     StLinkTransport& operator=(const StLinkTransport&) = delete;
+
+    /// Scan USB for all connected ST-Link probes (does not open them).
+    static std::vector<ProbeInfo> listProbes();
 
     // ── Transport interface ─────────────────────────────────
 

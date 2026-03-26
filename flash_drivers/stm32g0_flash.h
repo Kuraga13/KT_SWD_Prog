@@ -192,13 +192,15 @@ namespace g0_flash_loader {
 
 class Stm32G0FlashDriver : public FlashDriver {
 public:
-    ProgrammerStatus onConnect(Transport& transport) override;
     RdpLevel         readRdpLevel(Transport& transport) override;
     ProgrammerStatus eraseFlash(Transport& transport) override;
     ProgrammerStatus writeFlash(Transport& transport, const uint8_t* data,
                                 uint32_t address, uint32_t size) override;
     ProgrammerStatus writeOptionBytes(Transport& transport, const uint8_t* data,
                                       uint32_t address, uint32_t size, bool unsafe) override;
+    ProgrammerStatus writeOptionBytesMapped(Transport& transport,
+                                             const ObWriteEntry* entries, size_t count,
+                                             bool unsafe) override;
     ProgrammerStatus writeOtp(Transport& transport, const uint8_t* data,
                               uint32_t address, uint32_t size) override;
 

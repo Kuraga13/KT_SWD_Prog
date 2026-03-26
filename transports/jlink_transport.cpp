@@ -51,6 +51,36 @@ static void* get_sym(void* handle, const char* name) {
 #endif
 }
 
+// ── Probe scanning ──────────────────────────────────────────
+
+std::vector<ProbeInfo> JLinkTransport::listProbes() {
+    std::vector<ProbeInfo> result;
+
+    void* lib = load_lib(jlink::LIB_NAME);
+    if (!lib)
+        return result;
+
+    auto fn_open  = reinterpret_cast<jlink::FnOpen>(get_sym(lib, "JLINKARM_Open"));
+    auto fn_close = reinterpret_cast<jlink::FnClose>(get_sym(lib, "JLINKARM_Close"));
+    auto fn_sn    = reinterpret_cast<jlink::FnGetSN>(get_sym(lib, "JLINKARM_GetSN"));
+
+    if (fn_open && fn_close) {
+        if (fn_open() == 0) {
+            ProbeInfo info;
+            info.name = "J-Link";
+            if (fn_sn) {
+                uint32_t sn = fn_sn();
+                info.serial = std::to_string(sn);
+            }
+            result.push_back(std::move(info));
+            fn_close();
+        }
+    }
+
+    unload_lib(lib);
+    return result;
+}
+
 // ── Construction / Destruction ──────────────────────────────
 
 JLinkTransport::JLinkTransport(uint32_t speed_khz, jlink::Interface iface)

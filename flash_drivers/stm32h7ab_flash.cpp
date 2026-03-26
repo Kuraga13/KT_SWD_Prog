@@ -183,12 +183,11 @@ ProgrammerStatus Stm32H7abFlashDriver::writeOptionBytes(Transport& transport,
     if (status != ProgrammerStatus::Ok) { lockBank(transport, FLASH_CR1); return status; }
 
     if (!unsafe) {
-        // SAFETY: reject RDP Level 2 — permanently disables debug, irreversible
-        // OPTSR: RDP is in bits [15:8], i.e. byte offset 1 within the register
+        // SAFETY: reject RDP Level 2 — permanently disables debug access, IRREVERSIBLE.
         if (address <= FLASH_OPTSR_PRG && (address + size) > (FLASH_OPTSR_PRG + 1)) {
             uint8_t rdp = data[FLASH_OPTSR_PRG - address + 1];
             if (rdp == RDP_LEVEL_2) {
-                m_error_ = "RDP Level 2 would permanently lock the chip";
+                m_error_ = "Rejected: RDP Level 2 (0xCC) permanently disables debug — chip cannot be recovered";
                 lockBank(transport, FLASH_CR1);
                 return ProgrammerStatus::ErrorProtected;
             }
@@ -207,10 +206,60 @@ ProgrammerStatus Stm32H7abFlashDriver::writeOptionBytes(Transport& transport,
     if (status == ProgrammerStatus::Ok) {
         // Start option byte programming
         uint32_t optcr;
-        flash_read_word(transport, FLASH_OPTCR, optcr);
-        flash_write_word(transport, FLASH_OPTCR, optcr | OPTCR_OPTSTRT);
-        status = waitReady(transport, FLASH_SR1);
+        status = flash_read_word(transport, FLASH_OPTCR, optcr);
+        if (status == ProgrammerStatus::Ok)
+            status = flash_write_word(transport, FLASH_OPTCR, optcr | OPTCR_OPTSTRT);
+        if (status == ProgrammerStatus::Ok)
+            status = waitReady(transport, FLASH_SR1);
     }
+
+    lockBank(transport, FLASH_CR1);
+    return status;
+}
+
+ProgrammerStatus Stm32H7abFlashDriver::writeOptionBytesMapped(Transport& transport,
+                                                                 const ObWriteEntry* entries,
+                                                                 size_t count,
+                                                                 bool unsafe) {
+    using namespace stm32h7ab_flash;
+
+    auto status = unlockBank(transport, FLASH_KEYR1, FLASH_CR1);
+    if (status != ProgrammerStatus::Ok) return status;
+    status = unlockOptionBytes(transport);
+    if (status != ProgrammerStatus::Ok) { lockBank(transport, FLASH_CR1); return status; }
+
+    status = clearErrors(transport, FLASH_CCR1);
+    if (status != ProgrammerStatus::Ok) { lockBank(transport, FLASH_CR1); return status; }
+
+    if (!unsafe) {
+        // SAFETY: reject RDP Level 2 — permanently disables debug access, IRREVERSIBLE.
+        for (size_t i = 0; i < count; i++) {
+            if (entries[i].addr == FLASH_OPTSR_PRG) {
+                uint8_t rdp = static_cast<uint8_t>((entries[i].value >> 8) & 0xFF);
+                if (rdp == RDP_LEVEL_2) {
+                    m_error_ = "Rejected: RDP Level 2 (0xCC) permanently disables debug — chip cannot be recovered";
+                    lockBank(transport, FLASH_CR1);
+                    return ProgrammerStatus::ErrorProtected;
+                }
+                break;
+            }
+        }
+    }
+
+    for (size_t i = 0; i < count; i++) {
+        status = flash_write_word(transport, entries[i].addr, entries[i].value);
+        if (status != ProgrammerStatus::Ok) {
+            lockBank(transport, FLASH_CR1);
+            return status;
+        }
+    }
+
+    uint32_t optcr;
+    status = flash_read_word(transport, FLASH_OPTCR, optcr);
+    if (status == ProgrammerStatus::Ok)
+        status = flash_write_word(transport, FLASH_OPTCR, optcr | OPTCR_OPTSTRT);
+    if (status == ProgrammerStatus::Ok)
+        status = waitReady(transport, FLASH_SR1);
 
     lockBank(transport, FLASH_CR1);
     return status;

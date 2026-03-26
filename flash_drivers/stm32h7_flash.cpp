@@ -18,6 +18,11 @@
 
 using namespace stm32h7_flash;
 
+void Stm32H7FlashDriver::clearFlashErrors(Transport& transport) {
+    clearErrors(transport, FLASH_CCR1);
+    clearErrors(transport, FLASH_CCR2);
+}
+
 // ── Helpers ─────────────────────────────────────────────────
 
 ProgrammerStatus Stm32H7FlashDriver::unlockBank(Transport& transport, uint32_t keyr, uint32_t cr) {
@@ -322,12 +327,13 @@ ProgrammerStatus Stm32H7FlashDriver::writeOptionBytes(Transport& transport,
     if (status != ProgrammerStatus::Ok) { lockBank(transport, FLASH_CR1); return status; }
 
     if (!unsafe) {
-        // SAFETY: reject RDP Level 2 — permanently disables debug, irreversible
-        // H7 OPTSR: RDP is in bits [15:8], i.e. byte offset 1 within the register
+        // SAFETY: reject RDP Level 2 — permanently disables debug access, IRREVERSIBLE.
+        // The chip becomes a brick: no SWD, no JTAG, no recovery. Ever.
+        // H7 OPTSR: RDP is in bits [15:8], i.e. byte offset 1 within the register.
         if (address <= FLASH_OPTSR_PRG && (address + size) > (FLASH_OPTSR_PRG + 1)) {
             uint8_t rdp = data[FLASH_OPTSR_PRG - address + 1];
             if (rdp == RDP_LEVEL_2) {
-                m_error_ = "RDP Level 2 would permanently lock the chip";
+                m_error_ = "Rejected: RDP Level 2 (0xCC) permanently disables debug — chip cannot be recovered";
                 lockBank(transport, FLASH_CR1);
                 return ProgrammerStatus::ErrorProtected;
             }
@@ -346,10 +352,62 @@ ProgrammerStatus Stm32H7FlashDriver::writeOptionBytes(Transport& transport,
     if (status == ProgrammerStatus::Ok) {
         // Start option byte programming
         uint32_t optcr;
-        flash_read_word(transport, FLASH_OPTCR, optcr);
-        flash_write_word(transport, FLASH_OPTCR, optcr | OPTCR_OPTSTRT);
-        status = waitReady(transport, FLASH_SR1);
+        status = flash_read_word(transport, FLASH_OPTCR, optcr);
+        if (status == ProgrammerStatus::Ok)
+            status = flash_write_word(transport, FLASH_OPTCR, optcr | OPTCR_OPTSTRT);
+        if (status == ProgrammerStatus::Ok)
+            status = waitReady(transport, FLASH_SR1);
     }
+
+    lockBank(transport, FLASH_CR1);
+    return status;
+}
+
+ProgrammerStatus Stm32H7FlashDriver::writeOptionBytesMapped(Transport& transport,
+                                                               const ObWriteEntry* entries,
+                                                               size_t count,
+                                                               bool unsafe) {
+    using namespace stm32h7_flash;
+
+    auto status = unlockBank(transport, FLASH_KEYR1, FLASH_CR1);
+    if (status != ProgrammerStatus::Ok) return status;
+    status = unlockOptionBytes(transport);
+    if (status != ProgrammerStatus::Ok) { lockBank(transport, FLASH_CR1); return status; }
+
+    status = clearErrors(transport, FLASH_CCR1);
+    if (status != ProgrammerStatus::Ok) { lockBank(transport, FLASH_CR1); return status; }
+
+    if (!unsafe) {
+        // SAFETY: reject RDP Level 2 — permanently disables debug access, IRREVERSIBLE.
+        for (size_t i = 0; i < count; i++) {
+            if (entries[i].addr == FLASH_OPTSR_PRG) {
+                uint8_t rdp = static_cast<uint8_t>((entries[i].value >> 8) & 0xFF);
+                if (rdp == RDP_LEVEL_2) {
+                    m_error_ = "Rejected: RDP Level 2 (0xCC) permanently disables debug — chip cannot be recovered";
+                    lockBank(transport, FLASH_CR1);
+                    return ProgrammerStatus::ErrorProtected;
+                }
+                break;
+            }
+        }
+    }
+
+    // Write all PRG registers first (no OPTSTRT yet)
+    for (size_t i = 0; i < count; i++) {
+        status = flash_write_word(transport, entries[i].addr, entries[i].value);
+        if (status != ProgrammerStatus::Ok) {
+            lockBank(transport, FLASH_CR1);
+            return status;
+        }
+    }
+
+    // Single OPTSTRT to commit all option bytes atomically
+    uint32_t optcr;
+    status = flash_read_word(transport, FLASH_OPTCR, optcr);
+    if (status == ProgrammerStatus::Ok)
+        status = flash_write_word(transport, FLASH_OPTCR, optcr | OPTCR_OPTSTRT);
+    if (status == ProgrammerStatus::Ok)
+        status = waitReady(transport, FLASH_SR1);
 
     lockBank(transport, FLASH_CR1);
     return status;
@@ -365,7 +423,7 @@ ProgrammerStatus Stm32H7FlashDriver::writeOtp(Transport& transport,
     return ProgrammerStatus::ErrorWrite;
 }
 
-ProgrammerStatus Stm32H7FlashDriver::onDisconnect(Transport& transport) {
+ProgrammerStatus Stm32H7FlashDriver::resetTarget(Transport& transport) {
     // Trigger a clean system reset via Cortex-M AIRCR register.
     // This resets the chip independently of debug state, so the core
     // boots normally from the reset vector after the probe disconnects.

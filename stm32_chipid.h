@@ -61,6 +61,7 @@ enum class ChipFamily : uint8_t {
     H5,
     H7,
     H7AB,   // H7A3, H7B0, H7B3 (RM0455, 128-bit flash word)
+    H7RS,   // H7R3, H7R7, H7S3, H7S7 (RM0477, 64 KB boot flash)
     L0,
     L1,
     L4,
@@ -164,6 +165,7 @@ namespace stm32_chipid {
     constexpr uint16_t DEV_H74x_H75x       = 0x450;
     constexpr uint16_t DEV_H7Ax_H7Bx       = 0x480;
     constexpr uint16_t DEV_H72x_H73x       = 0x483;
+    constexpr uint16_t DEV_H7Rx_H7Sx       = 0x485;
 
     // STM32L0
     constexpr uint16_t DEV_L05x_L06x       = 0x417;
@@ -281,6 +283,10 @@ namespace stm32_chipid {
             // H7AB (RM0455 — different flash controller)
             case DEV_H7Ax_H7Bx:
                 return ChipFamily::H7AB;
+
+            // H7RS (RM0477 — 64 KB boot flash, single-bank)
+            case DEV_H7Rx_H7Sx:
+                return ChipFamily::H7RS;
 
             // L0
             case DEV_L05x_L06x:
