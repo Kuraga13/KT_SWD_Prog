@@ -24,7 +24,7 @@ families through multiple debug probes.
 | **STM32F4** | F401–F479 | OPTCR (sector-based, dual-bank) | **Yes** |
 | **STM32F7** | F72x–F77x | OPTCR (sector-based) | No |
 | **STM32G0** | G03x–G0Cx | PECR (page-based) | **Yes** |
-| **STM32G4** | G431–G4Ax | PECR (page-based) | No |
+| **STM32G4** | G431–G4Ax | PECR (page-based) | **Yes** |
 | **STM32H5** | H503, H523, H533, H562, H563 | PECR (sector-based) | No |
 | **STM32H7** | H72x–H75x | Dual-bank sector (256-bit) | **Yes** |
 | **STM32H7AB** | H7A3, H7B0, H7B3 | Dual-bank sector (128-bit) | No |
@@ -261,7 +261,7 @@ transports/                     Debug probe implementations
   jlink_transport.h/.cpp          SEGGER J-Link (runtime DLL loading)
 flash_drivers/                  Target driver implementations
   flash_utils.h                   Shared helpers (word read/write, busy-wait)
-  stm32*.h/.cpp                   STM32 families (F0-F7, G0, G4, H5, H7, H7RS, L0-L5, U5, WB, WL)
+  stm32*.h/.cpp                   STM32 families (F0-F7, G0, G4, H5, H7, H7AB, H7RS, L0-L5, U5, WB, WL)
   nxp/                            NXP Kinetis KE
     mke_ftmrh.h/.cpp                MKE02/KE04/KE06 (FTMRH flash controller)
     mke_ftfe.h/.cpp                 MKE14/KE15/KE16/KE18 (FTFE flash controller)
